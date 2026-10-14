@@ -1,0 +1,22 @@
+use serde::Serialize;
+use sqlx::{FromRow, SqlitePool};
+
+#[derive(Clone, Debug, Serialize, FromRow)]
+pub struct User {
+    pub id: i64,
+    pub name: String,
+    pub email: String,
+    #[serde(skip_serializing)]
+    pub password: String,
+    pub role: String,
+    pub status: String,
+    pub created_at: String,
+}
+impl User {
+    pub async fn find(db: &SqlitePool, id: i64) -> std::result::Result<Option<Self>, sqlx::Error> {
+        sqlx::query_as("SELECT * FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(db)
+            .await
+    }
+}

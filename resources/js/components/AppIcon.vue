@@ -1,0 +1,69 @@
+<script setup>
+import {
+  LayoutDashboard,
+  Users,
+  Settings2,
+  ArrowUpRight,
+  ArrowRight,
+  Plus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Menu,
+  LogOut,
+  Layers3,
+  ShieldCheck,
+  UserCheck,
+  UserPlus,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Check,
+  AlertCircle,
+  ChevronDown,
+  PanelLeftClose,
+  Command,
+  LoaderCircle,
+  Mail,
+  LockKeyhole,
+} from 'lucide-vue-next'
+defineProps({ name: String, size: { type: Number, default: 18 } })
+const icons = {
+  LayoutDashboard,
+  Users,
+  Settings2,
+  ArrowUpRight,
+  ArrowRight,
+  Plus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Menu,
+  LogOut,
+  Layers3,
+  ShieldCheck,
+  UserCheck,
+  UserPlus,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Check,
+  AlertCircle,
+  ChevronDown,
+  PanelLeftClose,
+  Command,
+  LoaderCircle,
+  Mail,
+  LockKeyhole,
+}
+</script>
+<template>
+  <component
+    :is="icons[name] || icons.Layers3"
+    :size="size"
+    :stroke-width="1.7"
+    aria-hidden="true"
+  />
+</template>

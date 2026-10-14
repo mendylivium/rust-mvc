@@ -1,0 +1,36 @@
+[package]
+name = "rust-mvc"
+version = "0.1.0"
+edition = "2024"
+default-run = "forge"
+
+[lib]
+path = "bootstrap/lib.rs"
+
+[[bin]]
+name = "forge"
+path = "main.rs"
+
+[dependencies]
+anyhow = "1"
+argon2 = "0.5"
+rand_core = { version = "0.6", features = ["getrandom"] }
+time = "0.3"
+axum = "0.8"
+axum-extra = { version = "0.12", features = ["cookie"] }
+clap = { version = "4", features = ["derive"] }
+dotenvy = "0.15"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "compression-gzip", "set-header"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+validator = { version = "0.20", features = ["derive"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
