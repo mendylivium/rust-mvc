@@ -7,3 +7,8 @@
 /playwright-report/
 /test-results/
 *.log
+
+/backups/
+
+/releases/
+/gen/

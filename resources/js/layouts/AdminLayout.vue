@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { auth, logout } from '../lib/auth'
 import { initials } from '../lib/format'
@@ -10,6 +10,44 @@ const route = useRoute(),
 const open = ref(false),
   busy = ref(false),
   error = ref('')
+const media = window.matchMedia('(max-width: 900px)')
+const mobile = ref(media.matches),
+  sidebar = ref(null),
+  menuButton = ref(null)
+function resized(event) {
+  mobile.value = event.matches
+  if (!event.matches) open.value = false
+}
+onMounted(() => media.addEventListener('change', resized))
+onBeforeUnmount(() => media.removeEventListener('change', resized))
+watch(open, async (value) => {
+  await nextTick()
+  if (!mobile.value) return
+  if (value) sidebar.value?.querySelector('button, a[href]')?.focus()
+  else menuButton.value?.focus()
+})
+function navigationKey(event) {
+  if (!mobile.value || !open.value) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    open.value = false
+    return
+  }
+  if (event.key !== 'Tab') return
+  const items = [...sidebar.value.querySelectorAll('a[href], button:not(:disabled)')].filter(
+    (element) => element.getClientRects().length > 0,
+  )
+  const first = items[0],
+    last = items.at(-1)
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  }
+  if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
+}
 async function signOut() {
   busy.value = true
   try {
@@ -25,12 +63,28 @@ async function signOut() {
 <template>
   <div class="app-shell">
     <button
-      v-if="open"
+      v-if="mobile && open"
+      tabindex="-1"
       class="sidebar-backdrop"
       aria-label="Close navigation"
       @click="open = false"
     ></button>
-    <aside class="sidebar" :class="{ open }">
+    <aside
+      ref="sidebar"
+      class="sidebar"
+      :class="{ open }"
+      :inert="mobile && !open"
+      :aria-hidden="mobile && !open ? true : undefined"
+      @keydown="navigationKey"
+    >
+      <button
+        v-if="mobile"
+        class="icon-button mobile-nav-close"
+        aria-label="Close menu"
+        @click="open = false"
+      >
+        <AppIcon name="X" />
+      </button>
       <RouterLink
         :to="auth.user?.role === 'admin' ? '/' : '/settings'"
         class="brand"
@@ -64,6 +118,21 @@ async function signOut() {
         <RouterLink to="/settings" active-class="selected" @click="open = false"
           ><AppIcon name="Settings2" />Settings</RouterLink
         >
+        <p class="nav-label">LEARN & BUILD</p>
+        <RouterLink
+          v-for="item in [
+            { path: '/guide', label: 'Getting started', icon: 'Command' },
+            { path: '/examples/elements', label: 'Elements & buttons', icon: 'Layers3' },
+            { path: '/examples/cards', label: 'Cards', icon: 'LayoutDashboard' },
+            { path: '/examples/tables', label: 'Tables', icon: 'Menu' },
+            { path: '/examples/forms', label: 'Forms', icon: 'Pencil' },
+          ]"
+          :key="item.path"
+          :to="item.path"
+          active-class="selected"
+          @click="open = false"
+          ><AppIcon :name="item.icon" />{{ item.label }}</RouterLink
+        >
       </nav>
       <div class="sidebar-bottom">
         <div class="build-note">
@@ -83,10 +152,11 @@ async function signOut() {
         </div>
       </div>
     </aside>
-    <div class="main-shell">
+    <div class="main-shell" :inert="mobile && open">
       <header class="topbar">
         <div class="breadcrumbs">
           <button
+            ref="menuButton"
             class="icon-button mobile-menu"
             aria-label="Open navigation"
             :aria-expanded="open"

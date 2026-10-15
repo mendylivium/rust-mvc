@@ -1,3 +1,7 @@
+MODE ?= server
+TARGET ?= $(shell node -p "({win32:'windows',darwin:'macos',linux:'linux'})[process.platform]")
+ARCH ?= $(shell node -p "process.arch")
+
 .PHONY: install dev build test check migrate seed
 install:
 	cargo fetch
@@ -5,8 +9,7 @@ install:
 dev:
 	node scripts/dev.mjs
 build:
-	npm run build
-	cargo build --release
+	node scripts/build.mjs --$(MODE) --target $(TARGET) --arch $(ARCH)
 test:
 	cargo test
 check:

@@ -16,13 +16,14 @@ COPY bootstrap ./bootstrap
 COPY config ./config
 COPY database ./database
 COPY routes ./routes
-RUN cargo build --locked --release
+COPY --from=frontend /app/dist ./dist
+COPY desktop ./desktop
+RUN cargo build --locked --release --bin forge --features embedded-assets
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/* && useradd --create-home app
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libssl3 && rm -rf /var/lib/apt/lists/* && useradd --create-home app
 WORKDIR /app
 COPY --from=backend /app/target/release/forge /usr/local/bin/forge
-COPY --from=frontend /app/dist ./dist
 RUN mkdir storage && chown app:app storage
 USER app
 ENV APP_HOST=0.0.0.0 APP_PORT=3000

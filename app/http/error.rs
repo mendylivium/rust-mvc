@@ -5,6 +5,7 @@ use axum::{
 };
 use serde_json::{Value, json};
 
+#[derive(Debug)]
 pub struct AppError(pub StatusCode, pub String, pub Value);
 impl AppError {
     pub fn new(status: StatusCode, message: &str) -> Self {

@@ -39,14 +39,9 @@ pub fn generate(name: &str, controller: bool) -> anyhow::Result<()> {
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'),
         "Use a snake_case identifier starting with a lowercase letter."
     );
+    // syn parses identifiers independently of edition; `gen` is reserved in Rust 2024.
     anyhow::ensure!(
-        ![
-            "mod", "self", "super", "crate", "type", "async", "await", "use", "pub", "fn",
-            "struct", "enum", "impl", "trait", "const", "static", "move", "ref", "match", "loop",
-            "for", "while", "if", "else", "return", "let", "in", "as", "where", "unsafe", "extern",
-            "dyn", "true", "false", "break", "continue", "mut", "gen", "box", "yield", "try"
-        ]
-        .contains(&name),
+        name != "gen" && syn::parse_str::<syn::Ident>(name).is_ok(),
         "Choose a non-keyword Rust identifier."
     );
     let directory = if controller {
@@ -63,6 +58,10 @@ pub fn generate(name: &str, controller: bool) -> anyhow::Result<()> {
             .filter(|s| !s.is_empty())
             .map(|s| format!("{}{}", s[..1].to_uppercase(), &s[1..]))
             .collect::<String>();
+        anyhow::ensure!(
+            syn::parse_str::<syn::Ident>(&class).is_ok(),
+            "The generated type name is a reserved Rust identifier."
+        );
         format!(
             "use serde::Serialize;\nuse sqlx::FromRow;\n\n#[derive(Debug, Serialize, FromRow)]\npub struct {class} {{\n    pub id: i64,\n}}\n"
         )

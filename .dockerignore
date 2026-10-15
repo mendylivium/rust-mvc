@@ -5,3 +5,10 @@ node_modules
 storage
 test-results
 playwright-report
+
+dist
+.env.*
+backups
+
+releases
+gen

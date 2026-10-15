@@ -1,4 +1,5 @@
-use super::auth_controller::hash_password;
+use super::auth_controller::hash_password_for_request;
+use crate::app::http::requests::extractors::{Json as Input, Path, Query};
 use crate::{
     AppState,
     app::{
@@ -11,11 +12,7 @@ use crate::{
         policies,
     },
 };
-use axum::{
-    Json,
-    extract::{Path, Query, State},
-    http::StatusCode,
-};
+use axum::{Json, extract::State, http::StatusCode};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -41,9 +38,7 @@ pub async fn index(
             .collect::<String>()
     );
     let role = filters.role.unwrap_or_default();
-    let total: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM users WHERE (name LIKE ? OR email LIKE ?) AND (? = '' OR role = ?)",
-    )
+    let total: i64 = sqlx::query_scalar(&crate::database::sql(&state.db, "SELECT COUNT(*) FROM users WHERE (LOWER(name) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?)) AND (? = '' OR role = ?)"),)
     .bind(&search)
     .bind(&search)
     .bind(&role)
@@ -52,7 +47,7 @@ pub async fn index(
     .await?;
     let last_page = ((total + 9) / 10).max(1);
     let page = filters.page.unwrap_or(1).clamp(1, last_page);
-    let users: Vec<User> = sqlx::query_as("SELECT * FROM users WHERE (name LIKE ? OR email LIKE ?) AND (? = '' OR role = ?) ORDER BY id DESC LIMIT 10 OFFSET ?")
+    let users: Vec<User> = sqlx::query_as(&crate::database::sql(&state.db, "SELECT * FROM users WHERE (LOWER(name) LIKE LOWER(?) OR LOWER(email) LIKE LOWER(?)) AND (? = '' OR role = ?) ORDER BY id DESC LIMIT 10 OFFSET ?"))
         .bind(&search).bind(&search).bind(&role).bind(&role).bind((page - 1) * 10).fetch_all(&state.db).await?;
     Ok(Json(
         json!({"data":users,"meta":{"total":total,"page":page,"per_page":10,"last_page":last_page}}),
@@ -61,59 +56,55 @@ pub async fn index(
 pub async fn store(
     State(state): State<AppState>,
     AuthUser(actor): AuthUser,
-    Json(input): Json<UserRequest>,
+    Input(input): Input<UserRequest>,
 ) -> Result<(StatusCode, Json<Value>)> {
     policies::admin(&actor)?;
     let input = input.validated(true)?;
-    let password = hash_password(input.password).await.map_err(|_| {
-        AppError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Password hashing failed.",
-        )
-    })?;
-    let id = sqlx::query(
+    let password = hash_password_for_request(&state, input.password).await?;
+    let mut tx = state.db.begin().await?;
+    crate::database::auth_lock(&mut tx).await?;
+    sqlx::query(&crate::database::sql(
+        &state.db,
         "INSERT INTO users (name, email, password, role, status) VALUES (?, ?, ?, ?, ?)",
-    )
+    ))
     .bind(input.name)
-    .bind(input.email)
+    .bind(&input.email)
     .bind(password)
     .bind(input.role)
     .bind(input.status)
-    .execute(&state.db)
-    .await?
-    .last_insert_rowid();
-    Ok((
-        StatusCode::CREATED,
-        Json(json!({"data":User::find(&state.db, id).await?})),
+    .execute(&mut *tx)
+    .await?;
+    let user: User = sqlx::query_as(&crate::database::sql(
+        &state.db,
+        "SELECT * FROM users WHERE email = ?",
     ))
+    .bind(&input.email)
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(json!({"data":user}))))
 }
 pub async fn update(
     State(state): State<AppState>,
     AuthUser(actor): AuthUser,
     Path(id): Path<i64>,
-    Json(input): Json<UserRequest>,
+    Input(input): Input<UserRequest>,
 ) -> Result<Json<Value>> {
     policies::admin(&actor)?;
     let input = input.validated(false)?;
     policies::modify_user(&actor, id, &input.role, &input.status)?;
-    let existing = User::find(&state.db, id)
-        .await?
-        .ok_or_else(|| AppError::new(StatusCode::NOT_FOUND, "User not found."))?;
+    if User::find(&state.db, id).await?.is_none() {
+        return Err(AppError::new(StatusCode::NOT_FOUND, "User not found."));
+    }
     let changed_password = !input.password.is_empty();
-    let password = if !changed_password {
-        existing.password
+    let password = if changed_password {
+        Some(hash_password_for_request(&state, input.password).await?)
     } else {
-        hash_password(input.password).await.map_err(|_| {
-            AppError::new(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Password hashing failed.",
-            )
-        })?
+        None
     };
     let mut tx = state.db.begin().await?;
-    sqlx::query(
-        "UPDATE users SET name = ?, email = ?, password = ?, role = ?, status = ? WHERE id = ?",
-    )
+    crate::database::auth_lock(&mut tx).await?;
+    sqlx::query(&crate::database::sql(&state.db, "UPDATE users SET name = ?, email = ?, password = COALESCE(?, password), role = ?, status = ? WHERE id = ?"),)
     .bind(input.name)
     .bind(input.email)
     .bind(password)
@@ -123,10 +114,13 @@ pub async fn update(
     .execute(&mut *tx)
     .await?;
     if changed_password || input.status == "inactive" {
-        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(&crate::database::sql(
+            &state.db,
+            "DELETE FROM sessions WHERE user_id = ?",
+        ))
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     }
     tx.commit().await?;
     Ok(Json(json!({"data":User::find(&state.db, id).await?})))
@@ -143,10 +137,13 @@ pub async fn destroy(
             "You cannot delete your own account.",
         ));
     }
-    let result = sqlx::query("DELETE FROM users WHERE id = ?")
-        .bind(id)
-        .execute(&state.db)
-        .await?;
+    let result = sqlx::query(&crate::database::sql(
+        &state.db,
+        "DELETE FROM users WHERE id = ?",
+    ))
+    .bind(id)
+    .execute(&state.db)
+    .await?;
     if result.rows_affected() == 0 {
         return Err(AppError::new(StatusCode::NOT_FOUND, "User not found."));
     }

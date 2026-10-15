@@ -1,9 +1,10 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
 import { auth, loadSession } from './lib/auth'
+import { isDesktop } from './lib/api'
 import AdminLayout from './layouts/AdminLayout.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: isDesktop ? createWebHashHistory() : createWebHistory(),
   routes: [
     {
       path: '/login',
@@ -15,6 +16,31 @@ const router = createRouter({
       component: AdminLayout,
       meta: { auth: true },
       children: [
+        {
+          path: 'guide',
+          component: () => import('./pages/GuidePage.vue'),
+          meta: { title: 'Getting started' },
+        },
+        {
+          path: 'examples/elements',
+          component: () => import('./pages/examples/ElementsPage.vue'),
+          meta: { title: 'Elements & buttons' },
+        },
+        {
+          path: 'examples/cards',
+          component: () => import('./pages/examples/CardsPage.vue'),
+          meta: { title: 'Cards' },
+        },
+        {
+          path: 'examples/tables',
+          component: () => import('./pages/examples/TablesPage.vue'),
+          meta: { title: 'Tables' },
+        },
+        {
+          path: 'examples/forms',
+          component: () => import('./pages/examples/FormsPage.vue'),
+          meta: { title: 'Forms' },
+        },
         {
           path: '',
           name: 'dashboard',

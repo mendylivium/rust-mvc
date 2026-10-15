@@ -1,6 +1,18 @@
 use super::error::{AppError, Result};
 use serde::Deserialize;
 use validator::Validate;
+pub mod extractors;
+
+pub fn normalize_email(email: &str) -> Result<String> {
+    let email = email.trim().to_lowercase();
+    if email.len() > 254 || !validator::ValidateEmail::validate_email(&email) {
+        return Err(AppError::validation(
+            "email",
+            "Please enter a valid email address.",
+        ));
+    }
+    Ok(email)
+}
 
 #[derive(Deserialize, Validate)]
 pub struct UserRequest {
@@ -16,7 +28,7 @@ pub struct UserRequest {
 impl UserRequest {
     pub fn validated(mut self, creating: bool) -> Result<Self> {
         self.name = self.name.trim().to_owned();
-        self.email = self.email.trim().to_lowercase();
+        self.email = normalize_email(&self.email)?;
         if let Err(errors) = self.validate() {
             let errors = errors
                 .field_errors()

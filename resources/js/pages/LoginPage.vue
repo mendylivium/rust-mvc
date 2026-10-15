@@ -1,10 +1,23 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
+import { api, isDesktop } from '../lib/api'
 import { useRouter } from 'vue-router'
 import { auth, login } from '../lib/auth'
 import AppIcon from '../components/AppIcon.vue'
 import FeedbackMessage from '../components/FeedbackMessage.vue'
-const form = reactive({ email: '', password: '' }),
+const firstRun = ref(false)
+const checking = ref(isDesktop)
+onMounted(async () => {
+  if (!isDesktop) return
+  try {
+    firstRun.value = (await api('/desktop/setup')).needs_setup
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    checking.value = false
+  }
+})
+const form = reactive({ name: '', email: '', password: '' }),
   busy = ref(false),
   error = ref('')
 const router = useRouter()
@@ -12,6 +25,7 @@ async function submit() {
   busy.value = true
   error.value = ''
   try {
+    if (firstRun.value) await api('/desktop/setup', { method: 'POST', body: form })
     await login(form)
     router.push(auth.user.role === 'admin' ? '/' : '/settings')
   } catch (e) {
@@ -49,10 +63,28 @@ async function submit() {
     <section class="login-form-panel">
       <div class="login-form-wrap">
         <span class="eyebrow">YOUR WORKSPACE, READY.</span>
-        <h2>Welcome back.</h2>
-        <p class="muted">Sign in to manage your application.</p>
+        <h2>{{ firstRun ? 'Create your workspace.' : 'Welcome back.' }}</h2>
+        <p class="muted">
+          {{
+            firstRun
+              ? 'Create the first administrator for this desktop workspace.'
+              : 'Sign in to manage your application.'
+          }}
+        </p>
         <FeedbackMessage :message="error" />
-        <form @submit.prevent="submit">
+        <p v-if="checking" role="status">Opening your workspace…</p>
+        <form v-else @submit.prevent="submit">
+          <template v-if="firstRun"
+            ><label class="field-label" for="setup-name">Full name</label
+            ><input
+              id="setup-name"
+              v-model="form.name"
+              class="input w-full"
+              required
+              minlength="2"
+              maxlength="80"
+              autocomplete="name"
+          /></template>
           <label class="field-label" for="email">Email address</label
           ><input
             id="email"
@@ -70,11 +102,13 @@ async function submit() {
             type="password"
             class="input w-full"
             placeholder="Enter your password"
-            autocomplete="current-password"
+            :autocomplete="firstRun ? 'new-password' : 'current-password'"
+            :minlength="firstRun ? 12 : undefined"
             required
             maxlength="128"
           /><button class="btn btn-primary w-full login-submit" :disabled="busy">
-            {{ busy ? 'Signing in…' : 'Sign in to workspace' }}<AppIcon name="ArrowRight" />
+            {{ busy ? 'Please wait…' : firstRun ? 'Create workspace' : 'Sign in to workspace'
+            }}<AppIcon name="ArrowRight" />
           </button>
         </form>
         <div class="login-help">

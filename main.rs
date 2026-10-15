@@ -38,7 +38,11 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!(%address, "RustMVC listening");
             axum::serve(
                 listener,
-                rust_mvc::application::router(AppState { db, config }),
+                rust_mvc::application::router(AppState {
+                    db,
+                    config,
+                    security: Default::default(),
+                }),
             )
             .with_graceful_shutdown(shutdown())
             .await?;

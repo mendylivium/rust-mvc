@@ -17,3 +17,9 @@ export async function logout() {
   await api('/auth/logout', { method: 'POST' })
   auth.user = null
 }
+
+window.addEventListener('session-refreshed', ({ detail }) => {
+  auth.user = detail.user
+  auth.appName = detail.app_name
+  auth.ready = true
+})

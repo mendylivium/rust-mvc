@@ -1,0 +1,2 @@
+CREATE TABLE auth_lock (id INTEGER PRIMARY KEY);
+INSERT INTO auth_lock (id) VALUES (1);
